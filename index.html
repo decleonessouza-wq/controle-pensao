@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Controle de Pensão Alimentícia</title>
+
+  <!-- PWA -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="manifest" href="manifest.webmanifest" />
+
+  <!-- jsPDF e AutoTable (para gerar PDF) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+
+  <!-- JSZip e FileSaver para .zip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  <style>
+    :root {
+      --color-base: #2563eb;
+      --color-base-soft: #dbeafe;
+      --color-base-strong: #1d4ed8;
+      --color-bg: #0f172a;
+      --color-card-bg: #0b1220;
+      --color-card-border: #1e293b;
+      --color-text: #e5e7eb;
+      --color-muted: #9ca3af;
+      --color-danger-bg: #3b1111;
+      --color-danger-border: #b91c1c;
+      --radius-lg: 14px;
+      --shadow-soft: 0 18px 35px rgba(15,23,42,0.75);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top, #1d4ed8 0, #020617 55%);
+      color: var(--color-text);
+      min-height: 100vh;
+    }
+
+    .app-shell {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+
+    .app-header {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+
+    .app-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pill {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.7);
+      border: 1px solid rgba(148,163,184,0.5);
+      color: var(--color-muted);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h1 span.logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--color-base), var(--color-base-strong));
+      box-shadow: 0 0 18px rgba(37,99,235,0.8);
+    }
+
+    p.subtitle {
+      margin: 0;
+      color: var(--color-muted);
+      font-size: 0.9rem;
+      max-width: 620px;
+    }
+
+    .layout-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+      gap: 16px;
+    }
+
+    .layout-full {
+      margin-top: 16px;
+    }
+
+    section.card {
+      background: radial-gradient(circle at top left, rgba(37,99,235,0.18), transparent 55%);
+      background-color: rgba(15,23,42,0.82);
+      border-radius: var(--radius-lg);
+      padding: 16px 16px 14px;
+      border: 1px solid var(--color-card-border);
+      box-shadow: var(--shadow-soft);
+      position: relative;
+      overflow: hidden;
+    }
+
+    section.card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 1px solid rgba(148,163,184,0.2);
+      pointer-events: none;
+    }
+
+    section.card h2 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    section.card h2 span.badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(37,99,235,0.12);
+      border: 1px solid rgba(59,130,246,0.4);
+      color: var(--color-base-soft);
+    }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--color-muted);
+      margin: 0 0 4px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--color-muted);
+    }
+
+    input[type="text"],
+    input[type="date"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 7px 9px;
+      margin-top: 3px;
+      border-radius: 9px;
+      border: 1px solid rgba(148,163,184,0.4);
+      background: rgba(15,23,42,0.9);
+      color: var(--color-text);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--color-base);
+      box-shadow: 0 0 0 1px rgba(37,99,235,0.6);
+      background: #020617;
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 7px 14px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.09s ease, box-shadow 0.09s ease, background 0.15s ease, border-color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, var(--color-base), var(--color-base-strong));
+      color: #f9fafb;
+      box-shadow: 0 10px 22px rgba(37,99,235,0.5);
+    }
+
+    button.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 28px rgba(37,99,235,0.7);
+    }
+
+    button.secondary {
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.6);
+      color: var(--color-text);
+    }
+
+    button.secondary:hover {
+      background: #020617;
+      transform: translateY(-1px);
+    }
+
+    button.danger {
+      background: var(--color-danger-bg);
+      border: 1px solid var(--color-danger-border);
+      color: #fecaca;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 0.75rem;
+    }
+
+    button.danger:hover {
+      transform: translateY(-1px);
+    }
+
+    button + button {
+      margin-left: 6px;
+    }
+
+    .payments-input-row {
+      display: grid;
+      grid-template-columns: 120px 120px minmax(0, 1.2fr) minmax(0, 1.1fr) 120px;
+      gap: 8px;
+      margin-bottom: 10px;
+      align-items: flex-end;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 0.78rem;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(30,64,175,0.7);
+      background: rgba(15,23,42,0.9);
+    }
+
+    th, td {
+      border-bottom: 1px solid rgba(30,64,175,0.4);
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    th {
+      background: radial-gradient(circle at top, rgba(37,99,235,0.5), rgba(15,23,42,0.98));
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    td.numeric {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    td.center {
+      text-align: center;
+    }
+
+    .summary-row {
+      margin-bottom: 3px;
+      font-size: 0.85rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .summary-row span.label {
+      font-weight: 500;
+      color: var(--color-muted);
+    }
+
+    .summary-row span.value {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .summary-row.negative span.value {
+      color: #fecaca;
+    }
+
+    .summary-row.positive span.value {
+      color: #bbf7d0;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      align-items: center;
+    }
+
+    .toolbar input[type="file"] {
+      font-size: 0.78rem;
+      color: var(--color-muted);
+    }
+
+    .toolbar label {
+      font-size: 0.74rem;
+    }
+
+    .badge-status {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.6);
+      color: var(--color-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .badge-status span.dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34,197,94,0.8);
+    }
+
+    .badge-status.loading span.dot {
+      background: #eab308;
+      box-shadow: 0 0 8px rgba(234,179,8,0.8);
+    }
+
+    .badge-status.error span.dot {
+      background: #f97373;
+      box-shadow: 0 0 8px rgba(248,113,113,0.8);
+    }
+
+    .inpc-result {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: radial-gradient(circle at top left, rgba(37,99,235,0.35), rgba(15,23,42,0.95));
+      border: 1px solid rgba(59,130,246,0.6);
+      font-size: 0.85rem;
+    }
+
+    .inpc-result strong {
+      display: block;
+      margin-top: 4px;
+      margin-bottom: 2px;
+      color: var(--color-base-soft);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.6);
+      color: var(--color-muted);
+      margin-top: 4px;
+    }
+
+    .tag span.icon {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--color-base);
+    }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: var(--color-muted);
+    }
+
+    .switch-row input[type="checkbox"] {
+      width: 36px;
+      height: 18px;
+      appearance: none;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.7);
+      background: rgba(15,23,42,0.9);
+      position: relative;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .switch-row input[type="checkbox"]::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 3px;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      transition: transform 0.15s ease;
+    }
+
+    .switch-row input[type="checkbox"]:checked {
+      background: rgba(37,99,235,0.4);
+      border-color: var(--color-base);
+    }
+
+    .switch-row input[type="checkbox"]:checked::before {
+      transform: translateX(14px);
+      background: #bfdbfe;
+    }
+
+    /* Avatar / perfil criança */
+    .profile-wrapper {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .avatar-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      min-width: 90px;
+    }
+
+    .avatar-circle {
+      width: 72px;
+      height: 72px;
+      border-radius: 999px;
+      border: 2px solid rgba(59,130,246,0.8);
+      background: radial-gradient(circle at top, #1d4ed8, #020617);
+      box-shadow: 0 0 18px rgba(37,99,235,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #e5e7eb;
+      font-weight: 700;
+      font-size: 1.3rem;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .avatar-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .avatar-initials {
+      opacity: 0.9;
+    }
+
+    .avatar-label {
+      font-size: 0.7rem;
+      color: var(--color-muted);
+    }
+
+    .avatar-upload-btn {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px dashed rgba(148,163,184,0.8);
+      background: rgba(15,23,42,0.85);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .avatar-upload-btn:hover {
+      border-style: solid;
+      border-color: var(--color-base);
+      color: var(--color-base-soft);
+    }
+
+    @media (max-width: 860px) {
+      .layout-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .payments-input-row {
+        grid-template-columns: 1fr;
+      }
+
+      .app-header {
+        align-items: flex-start;
+      }
+
+      .profile-wrapper {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .avatar-wrapper {
+        flex-direction: row;
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-title-row">
+        <span class="pill">Pensão alimentícia • controle inteligente</span>
+      </div>
+      <h1>
+        <span class="logo-dot"></span>
+        Controle de Pensão Alimentícia
+      </h1>
+      <p class="subtitle">
+        Cadastro completo, foto da criança, comprovantes em PDF, resumo mensal, histórico de pagamentos,
+        relatório em PDF, correção por INPC e suporte a PWA.
+      </p>
+    </header>
+
+    <!-- GRID SUPERIOR: DADOS / CONFIG -->
+    <div class="layout-grid">
+      <!-- 1. Criança e Responsável -->
+      <section class="card">
+        <h2>1. Perfil da Criança <span class="badge">dados e foto</span></h2>
+        <p class="hint">Os dados e a foto ficam salvos no navegador (localStorage).</p>
+
+        <div class="profile-wrapper">
+          <div class="avatar-wrapper">
+            <div id="childAvatar" class="avatar-circle">
+              <span class="avatar-initials">👶</span>
+            </div>
+            <div class="avatar-label">Foto da criança</div>
+            <label class="avatar-upload-btn">
+              📷 Selecionar foto
+              <input id="childPhotoInput" type="file" accept="image/*" hidden>
+            </label>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="childName">Nome da criança</label>
+              <input id="childName" type="text">
+            </div>
+            <div>
+              <label for="birthDate">Data de nascimento</label>
+              <input id="birthDate" type="date">
+            </div>
+            <div>
+              <label for="responsibleName">Responsável legal</label>
+              <input id="responsibleName" type="text">
+            </div>
+            <div>
+              <label for="responsibleContact">Contato do responsável</label>
+              <input id="responsibleContact" type="text" placeholder="Telefone, e-mail, etc.">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Valores da Pensão + Controle Mês/Ano + Resumo -->
+      <section class="card">
+        <h2>2. Valores & Período <span class="badge">configuração</span></h2>
+        <p class="hint">Defina o valor devido por mês e escolha o mês/ano para análise.</p>
+
+        <div class="grid-2">
+          <div>
+            <label for="monthlyAmount">Valor mensal da pensão (R$)</label>
+            <input id="monthlyAmount" type="number" min="0" step="0.01">
+          </div>
+          <div>
+            <label for="extraAdjustments">Ajustes extras no mês (R$)</label>
+            <input id="extraAdjustments" type="number" min="0" step="0.01">
+          </div>
+        </div>
+
+        <div style="margin-top: 8px;">
+          <label for="configNotes">Observações gerais</label>
+          <textarea id="configNotes" rows="3"></textarea>
+        </div>
+
+        <hr style="margin: 14px 0; border: none; border-top: 1px solid rgba(51,65,85,0.9);">
+
+        <div class="grid-2">
+          <div>
+            <label for="monthSelect">Mês</label>
+            <select id="monthSelect"></select>
+          </div>
+          <div>
+            <label for="yearSelect">Ano</label>
+            <select id="yearSelect"></select>
+          </div>
+        </div>
+
+        <div style="margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(15,23,42,0.9); border: 1px solid rgba(51,65,85,0.9);">
+          <p id="summaryPeriod" class="hint" style="margin-bottom: 6px;"></p>
+          <div class="summary-row">
+            <span class="label">Total devido no mês</span>
+            <span id="summaryTotalDue" class="value"></span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Total pago no mês</span>
+            <span id="summaryTotalPaid" class="value"></span>
+          </div>
+          <div class="summary-row" id="balanceRow">
+            <span class="label">Saldo devedor no mês</span>
+            <span id="summaryBalance" class="value"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 3. Pagamentos -->
+    <div class="layout-full">
+      <section class="card">
+        <h2>3. Histórico de Pagamentos <span class="badge">lançamentos + comprovantes</span></h2>
+        <p class="hint">Registre cada pagamento e anexe o comprovante em PDF, se quiser.</p>
+
+        <div class="payments-input-row">
+          <div>
+            <label for="paymentDate">Data</label>
+            <input id="paymentDate" type="date">
+          </div>
+          <div>
+            <label for="paymentAmount">Valor pago (R$)</label>
+            <input id="paymentAmount" type="number" min="0" step="0.01">
+          </div>
+          <div>
+            <label for="paymentNotes">Observações</label>
+            <input id="paymentNotes" type="text">
+          </div>
+          <div>
+            <label for="paymentReceipt">Comprovante (PDF)</label>
+            <input id="paymentReceipt" type="file" accept="application/pdf">
+          </div>
+          <div>
+            <button id="addPaymentBtn" class="primary" type="button">
+              ➕ Adicionar
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-top: 8px;">
+          <span class="tag">
+            <span class="icon"></span>
+            Todos os pagamentos já registrados (com link para comprovantes, quando anexados)
+          </span>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Valor</th>
+              <th>Observações</th>
+              <th>Comprovante</th>
+              <th style="text-align: center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="paymentsTableBody">
+            <!-- linhas via JS -->
+          </tbody>
+        </table>
+
+        <div class="toolbar">
+          <button id="exportPdfBtn" class="secondary" type="button">📄 Exportar relatório em PDF</button>
+          <button id="exportCsvBtn" class="secondary" type="button">📁 Exportar pagamentos (CSV)</button>
+          <button id="downloadReceiptsZipBtn" class="secondary" type="button">📦 Baixar comprovantes (.zip)</button>
+
+          <div>
+            <label>
+              Importar pagamentos (CSV)
+            </label><br />
+            <input id="importCsvInput" type="file" accept=".csv" />
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 4. Calculadora de Atrasos com INPC -->
+    <div class="layout-full">
+      <section class="card">
+        <h2>4. Calculadora de Atrasos (INPC) <span class="badge">correção monetária</span></h2>
+        <p class="hint">
+          Buscamos automaticamente o INPC mensal na API do Banco Central (série SGS 188) para o período entre
+          o vencimento e o pagamento e calculamos a correção acumulada.
+        </p>
+
+        <div class="grid-2">
+          <div>
+            <label for="inpcOriginalAmount">Valor original devido (R$)</label>
+            <input id="inpcOriginalAmount" type="number" min="0" step="0.01">
+          </div>
+          <div>
+            <label for="inpcPaidAmount">Valor efetivamente pago (R$) <span style="color:#9ca3af;">(opcional)</span></label>
+            <input id="inpcPaidAmount" type="number" min="0" step="0.01">
+          </div>
+          <div>
+            <label for="inpcDueDate">Data de vencimento</label>
+            <input id="inpcDueDate" type="date">
+          </div>
+          <div>
+            <label for="inpcPayDate">Data de pagamento</label>
+            <input id="inpcPayDate" type="date">
+          </div>
+        </div>
+
+        <div class="switch-row">
+          <input id="useAutoInpc" type="checkbox" checked />
+          <span>Usar INPC automático pela API do BCB (SGS 188)</span>
+          <span id="inpcApiStatus" class="badge-status">
+            <span class="dot"></span>
+            pronto
+          </span>
+        </div>
+
+        <div style="margin-top: 10px; display:flex; flex-wrap:wrap; gap:8px;">
+          <button id="fetchInpcBtn" class="secondary" type="button">
+            🔍 Buscar INPC do período
+          </button>
+          <button id="calculateInpcBtn" class="primary" type="button">
+            🧮 Calcular correção
+          </button>
+        </div>
+
+        <div class="tag" style="margin-top: 8px;">
+          <span class="icon"></span>
+          Quando o INPC automático falhar, você ainda pode informar o índice manualmente abaixo.
+        </div>
+
+        <div style="margin-top: 10px; max-width:320px;">
+          <label for="inpcAccumulated">INPC acumulado no período (%) <span style="color:#9ca3af;">(auto ou manual)</span></label>
+          <input id="inpcAccumulated" type="number" step="0.01" min="0" placeholder="Ex: 3,5">
+        </div>
+
+        <div id="inpcResultBox" class="inpc-result" style="display:none;">
+          <div id="inpcDaysLateText"></div>
+          <strong>INPC acumulado no período (composto):</strong>
+          <div id="inpcAccumulatedText"></div>
+          <strong>Valor corrigido pelo INPC:</strong>
+          <div id="inpcCorrectedValue"></div>
+          <strong>Diferença em relação ao valor pago:</strong>
+          <div id="inpcDifferenceValue"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // ======= MODELO DE DADOS =======
+    const STORAGE_KEY = "controle_pensao_dados_v1";
+
+    const defaultData = {
+      childInfo: {
+        childName: "",
+        birthDate: "",
+        responsibleName: "",
+        responsibleContact: "",
+        photoDataUrl: null
+      },
+      pensionConfig: {
+        monthlyAmount: 0,
+        extraAdjustments: 0,
+        notes: ""
+      },
+      payments: [] // { id, date, amount, notes, receiptPdfDataUrl? }
+    };
+
+    let appData = loadData();
+
+    function loadData() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return structuredClone(defaultData);
+        const parsed = JSON.parse(saved);
+        if (!parsed.childInfo) parsed.childInfo = {};
+        if (parsed.childInfo.photoDataUrl === undefined) {
+          parsed.childInfo.photoDataUrl = null;
+        }
+        return parsed;
+      } catch (e) {
+        console.error("Erro ao carregar dados:", e);
+        return structuredClone(defaultData);
+      }
+    }
+
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    }
+
+    function generateId() {
+      if (window.crypto && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return "id-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ======= ELEMENTOS =======
+    const childNameEl = document.getElementById("childName");
+    const birthDateEl = document.getElementById("birthDate");
+    const responsibleNameEl = document.getElementById("responsibleName");
+    const responsibleContactEl = document.getElementById("responsibleContact");
+    const childAvatarEl = document.getElementById("childAvatar");
+    const childPhotoInputEl = document.getElementById("childPhotoInput");
+
+    const monthlyAmountEl = document.getElementById("monthlyAmount");
+    const extraAdjustmentsEl = document.getElementById("extraAdjustments");
+    const configNotesEl = document.getElementById("configNotes");
+
+    const monthSelectEl = document.getElementById("monthSelect");
+    const yearSelectEl = document.getElementById("yearSelect");
+
+    const paymentDateEl = document.getElementById("paymentDate");
+    const paymentAmountEl = document.getElementById("paymentAmount");
+    const paymentNotesEl = document.getElementById("paymentNotes");
+    const paymentReceiptEl = document.getElementById("paymentReceipt");
+    const addPaymentBtn = document.getElementById("addPaymentBtn");
+    const paymentsTableBody = document.getElementById("paymentsTableBody");
+
+    const exportPdfBtn = document.getElementById("exportPdfBtn");
+    const exportCsvBtn = document.getElementById("exportCsvBtn");
+    const importCsvInput = document.getElementById("importCsvInput");
+    const downloadReceiptsZipBtn = document.getElementById("downloadReceiptsZipBtn");
+
+    const summaryPeriodEl = document.getElementById("summaryPeriod");
+    const summaryTotalDueEl = document.getElementById("summaryTotalDue");
+    const summaryTotalPaidEl = document.getElementById("summaryTotalPaid");
+    const summaryBalanceEl = document.getElementById("summaryBalance");
+    const balanceRowEl = document.getElementById("balanceRow");
+
+    // INPC elements
+    const inpcOriginalAmountEl = document.getElementById("inpcOriginalAmount");
+    const inpcPaidAmountEl = document.getElementById("inpcPaidAmount");
+    const inpcDueDateEl = document.getElementById("inpcDueDate");
+    const inpcPayDateEl = document.getElementById("inpcPayDate");
+    const inpcAccumulatedEl = document.getElementById("inpcAccumulated");
+    const useAutoInpcEl = document.getElementById("useAutoInpc");
+    const fetchInpcBtn = document.getElementById("fetchInpcBtn");
+    const calculateInpcBtn = document.getElementById("calculateInpcBtn");
+    const inpcResultBoxEl = document.getElementById("inpcResultBox");
+    const inpcDaysLateTextEl = document.getElementById("inpcDaysLateText");
+    const inpcCorrectedValueEl = document.getElementById("inpcCorrectedValue");
+    const inpcDifferenceValueEl = document.getElementById("inpcDifferenceValue");
+    const inpcAccumulatedTextEl = document.getElementById("inpcAccumulatedText");
+    const inpcApiStatusEl = document.getElementById("inpcApiStatus");
+
+    // ======= INICIALIZAÇÃO =======
+
+    function initMonthYearSelectors() {
+      const monthNames = [
+        "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+        "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"
+      ];
+
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+
+      monthSelectEl.innerHTML = "";
+      monthNames.forEach((name, idx) => {
+        const opt = document.createElement("option");
+        opt.value = String(idx + 1);
+        opt.textContent = name;
+        if (idx + 1 === currentMonth) opt.selected = true;
+        monthSelectEl.appendChild(opt);
+      });
+
+      yearSelectEl.innerHTML = "";
+      const startYear = currentYear - 10;
+      const endYear = currentYear + 1;
+      for (let y = startYear; y <= endYear; y++) {
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = String(y);
+        if (y === currentYear) opt.selected = true;
+        yearSelectEl.appendChild(opt);
+      }
+    }
+
+    function updateChildAvatar(photoDataUrl) {
+      childAvatarEl.innerHTML = "";
+
+      if (photoDataUrl) {
+        const img = document.createElement("img");
+        img.src = photoDataUrl;
+        img.alt = "Foto da criança";
+        childAvatarEl.appendChild(img);
+      } else {
+        const initialsSpan = document.createElement("span");
+        initialsSpan.className = "avatar-initials";
+        const name = appData.childInfo.childName || "";
+        const parts = name.trim().split(" ").filter(Boolean);
+        if (parts.length > 0) {
+          const initials = (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
+          initialsSpan.textContent = initials;
+        } else {
+          initialsSpan.textContent = "👶";
+        }
+        childAvatarEl.appendChild(initialsSpan);
+      }
+    }
+
+    function fillFormFromData() {
+      const { childInfo, pensionConfig } = appData;
+
+      childNameEl.value = childInfo.childName || "";
+      birthDateEl.value = childInfo.birthDate || "";
+      responsibleNameEl.value = childInfo.responsibleName || "";
+      responsibleContactEl.value = childInfo.responsibleContact || "";
+      updateChildAvatar(childInfo.photoDataUrl);
+
+      monthlyAmountEl.value = pensionConfig.monthlyAmount || "";
+      extraAdjustmentsEl.value = pensionConfig.extraAdjustments || "";
+      configNotesEl.value = pensionConfig.notes || "";
+    }
+
+    // ======= EVENTOS DE INPUT =======
+
+    // Criança / responsável
+    childNameEl.addEventListener("input", () => {
+      appData.childInfo.childName = childNameEl.value;
+      saveData();
+      updateChildAvatar(appData.childInfo.photoDataUrl);
+    });
+    birthDateEl.addEventListener("input", () => {
+      appData.childInfo.birthDate = birthDateEl.value;
+      saveData();
+    });
+    responsibleNameEl.addEventListener("input", () => {
+      appData.childInfo.responsibleName = responsibleNameEl.value;
+      saveData();
+    });
+    responsibleContactEl.addEventListener("input", () => {
+      appData.childInfo.responsibleContact = responsibleContactEl.value;
+      saveData();
+    });
+
+    // Foto da criança
+    childPhotoInputEl.addEventListener("change", async () => {
+      const file = childPhotoInputEl.files[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        alert("Selecione um arquivo de imagem válido (JPG, PNG, etc).");
+        return;
+      }
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        appData.childInfo.photoDataUrl = dataUrl;
+        saveData();
+        updateChildAvatar(dataUrl);
+        childPhotoInputEl.value = "";
+      } catch (err) {
+        console.error("Erro ao ler foto:", err);
+        alert("Não foi possível carregar a foto.");
+      }
+    });
+
+    // Configuração da pensão
+    monthlyAmountEl.addEventListener("input", () => {
+      appData.pensionConfig.monthlyAmount = parseFloat(monthlyAmountEl.value) || 0;
+      saveData();
+      updateSummary();
+    });
+    extraAdjustmentsEl.addEventListener("input", () => {
+      appData.pensionConfig.extraAdjustments = parseFloat(extraAdjustmentsEl.value) || 0;
+      saveData();
+      updateSummary();
+    });
+    configNotesEl.addEventListener("input", () => {
+      appData.pensionConfig.notes = configNotesEl.value;
+      saveData();
+    });
+
+    monthSelectEl.addEventListener("change", updateSummary);
+    yearSelectEl.addEventListener("change", updateSummary);
+
+    // Pagamentos (com comprovante PDF)
+    addPaymentBtn.addEventListener("click", async () => {
+      const date = paymentDateEl.value;
+      const amount = parseFloat(paymentAmountEl.value);
+      const notes = paymentNotesEl.value.trim();
+      const receiptFile = paymentReceiptEl.files[0];
+
+      if (!date || isNaN(amount)) {
+        alert("Informe a data e o valor do pagamento.");
+        return;
+      }
+
+      let receiptPdfDataUrl = null;
+      if (receiptFile) {
+        if (receiptFile.type !== "application/pdf") {
+          alert("O comprovante deve ser um arquivo PDF.");
+          return;
+        }
+        try {
+          receiptPdfDataUrl = await readFileAsDataUrl(receiptFile);
+        } catch (err) {
+          console.error("Erro ao ler PDF:", err);
+          alert("Não foi possível ler o comprovante em PDF.");
+          return;
+        }
+      }
+
+      const payment = {
+        id: generateId(),
+        date,
+        amount,
+        notes,
+        receiptPdfDataUrl
+      };
+
+      appData.payments.push(payment);
+      saveData();
+
+      paymentDateEl.value = "";
+      paymentAmountEl.value = "";
+      paymentNotesEl.value = "";
+      paymentReceiptEl.value = "";
+
+      renderPaymentsTable();
+      updateSummary();
+    });
+
+    // Exportar PDF
+    exportPdfBtn.addEventListener("click", () => {
+      exportToPdf();
+    });
+
+    // Exportar CSV
+    exportCsvBtn.addEventListener("click", () => {
+      exportPaymentsToCsv();
+    });
+
+    // Baixar todos comprovantes em .zip
+    downloadReceiptsZipBtn.addEventListener("click", async () => {
+      const paymentsWithReceipts = appData.payments.filter(p => p.receiptPdfDataUrl);
+      if (paymentsWithReceipts.length === 0) {
+        alert("Não há comprovantes em PDF anexados.");
+        return;
+      }
+
+      const zip = new JSZip();
+      let index = 1;
+
+      for (const p of paymentsWithReceipts) {
+        const base64 = p.receiptPdfDataUrl.split(",")[1];
+        const dateSafe = (p.date || "sem-data").replace(/[^0-9-]/g, "");
+        const filename = `comprovante_${dateSafe}_${String(index).padStart(2,"0")}.pdf`;
+        zip.file(filename, base64, { base64: true });
+        index++;
+      }
+
+      try {
+        const blob = await zip.generateAsync({ type: "blob" });
+        saveAs(blob, "comprovantes_pensao.zip");
+      } catch (err) {
+        console.error("Erro ao gerar zip:", err);
+        alert("Não foi possível gerar o arquivo .zip de comprovantes.");
+      }
+    });
+
+    // Importar CSV (sem comprovantes)
+    importCsvInput.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        importPaymentsFromCsv(text);
+        importCsvInput.value = "";
+      };
+      reader.readAsText(file, "utf-8");
+    });
+
+    // Buscar INPC pela API (BCB SGS 188)
+    fetchInpcBtn.addEventListener("click", async () => {
+      await handleFetchInpc();
+    });
+
+    // Calcular correção INPC
+    calculateInpcBtn.addEventListener("click", async () => {
+      if (useAutoInpcEl.checked && !inpcAccumulatedEl.value) {
+        const ok = await handleFetchInpc(true);
+        if (!ok) {
+          // segue com valor manual, se houver
+        }
+      }
+      calculateInpc();
+    });
+
+    // ======= RENDERIZAÇÃO =======
+
+    function renderPaymentsTable() {
+      paymentsTableBody.innerHTML = "";
+
+      const sorted = [...appData.payments].sort((a, b) => a.date.localeCompare(b.date));
+
+      if (sorted.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.textContent = "Nenhum pagamento registrado.";
+        td.style.color = "#9ca3af";
+        td.style.textAlign = "center";
+        tr.appendChild(td);
+        paymentsTableBody.appendChild(tr);
+        return;
+      }
+
+      for (const p of sorted) {
+        const tr = document.createElement("tr");
+
+        const dateTd = document.createElement("td");
+        dateTd.textContent = formatDateBR(p.date);
+        tr.appendChild(dateTd);
+
+        const amountTd = document.createElement("td");
+        amountTd.textContent = formatCurrency(p.amount);
+        amountTd.classList.add("numeric");
+        tr.appendChild(amountTd);
+
+        const notesTd = document.createElement("td");
+        notesTd.textContent = p.notes || "";
+        tr.appendChild(notesTd);
+
+        const receiptTd = document.createElement("td");
+        if (p.receiptPdfDataUrl) {
+          const viewBtn = document.createElement("button");
+          viewBtn.type = "button";
+          viewBtn.className = "secondary";
+          viewBtn.textContent = "Ver comprovante";
+          viewBtn.addEventListener("click", () => {
+            window.open(p.receiptPdfDataUrl, "_blank");
+          });
+          receiptTd.appendChild(viewBtn);
+        } else {
+          receiptTd.textContent = "-";
+          receiptTd.style.color = "#9ca3af";
+        }
+        tr.appendChild(receiptTd);
+
+        const actionsTd = document.createElement("td");
+        actionsTd.classList.add("center");
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.textContent = "Excluir";
+        delBtn.className = "danger";
+        delBtn.addEventListener("click", () => {
+          if (confirm("Deseja realmente excluir este pagamento?")) {
+            appData.payments = appData.payments.filter(pay => pay.id !== p.id);
+            saveData();
+            renderPaymentsTable();
+            updateSummary();
+          }
+        });
+        actionsTd.appendChild(delBtn);
+        tr.appendChild(actionsTd);
+
+        paymentsTableBody.appendChild(tr);
+      }
+    }
+
+    function updateSummary() {
+      const month = parseInt(monthSelectEl.value, 10);
+      const year = parseInt(yearSelectEl.value, 10);
+
+      const monthNames = [
+        "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+        "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"
+      ];
+
+      summaryPeriodEl.textContent = `Período selecionado: ${monthNames[month - 1]} / ${year}`;
+
+      const { monthlyAmount, extraAdjustments } = appData.pensionConfig;
+
+      const paymentsInPeriod = appData.payments.filter(p => {
+        const d = new Date(p.date + "T00:00:00");
+        return d.getMonth() + 1 === month && d.getFullYear() === year;
+      });
+
+      const totalPaid = paymentsInPeriod.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const totalDue = (monthlyAmount || 0) + (extraAdjustments || 0);
+      const balance = totalDue - totalPaid;
+
+      summaryTotalDueEl.textContent = formatCurrency(totalDue);
+      summaryTotalPaidEl.textContent = formatCurrency(totalPaid);
+      summaryBalanceEl.textContent = formatCurrency(balance);
+
+      balanceRowEl.classList.remove("negative", "positive");
+      if (balance > 0) {
+        balanceRowEl.classList.add("negative");
+      } else {
+        balanceRowEl.classList.add("positive");
+      }
+    }
+
+    // ======= UTILITÁRIOS =======
+
+    function formatCurrency(value) {
+      return value.toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL"
+      });
+    }
+
+    function formatDateBR(dateStr) {
+      const [year, month, day] = dateStr.split("-");
+      return `${day}/${month}/${year}`;
+    }
+
+    // ======= INPC API (BCB SGS 188) =======
+    async function handleFetchInpc(silent = false) {
+      const dueDateStr = inpcDueDateEl.value;
+      const payDateStr = inpcPayDateEl.value;
+
+      if (!dueDateStr || !payDateStr) {
+        if (!silent) alert("Informe a data de vencimento e a data de pagamento.");
+        return false;
+      }
+
+      const due = new Date(dueDateStr + "T00:00:00");
+      const pay = new Date(payDateStr + "T00:00:00");
+
+      if (pay < due) {
+        if (!silent) alert("A data de pagamento não pode ser anterior ao vencimento.");
+        return false;
+      }
+
+      const dataInicial = `01/${String(due.getMonth()+1).padStart(2,"0")}/${due.getFullYear()}`;
+      const dataFinal = `31/${String(pay.getMonth()+1).padStart(2,"0")}/${pay.getFullYear()}`;
+
+      const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.188/dados?formato=json&dataInicial=${dataInicial}&dataFinal=${dataFinal}`;
+
+      setApiStatus("loading");
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error("Resposta HTTP não OK");
+        }
+        const data = await res.json();
+
+        if (!Array.isArray(data) || data.length === 0) {
+          throw new Error("Sem dados de INPC para o período.");
+        }
+
+        let fator = 1;
+        data.forEach(item => {
+          const v = parseFloat(String(item.valor).replace(",", "."));
+          if (!isNaN(v)) {
+            fator *= (1 + v / 100);
+          }
+        });
+
+        const acumuladoPercent = (fator - 1) * 100;
+        const rounded = Math.round(acumuladoPercent * 100) / 100;
+
+        inpcAccumulatedEl.value = String(rounded).replace(".", ",");
+
+        setApiStatus("ok");
+
+        if (!silent) {
+          alert(`INPC acumulado aproximado no período: ${rounded.toFixed(2)}%`);
+        }
+
+        return true;
+      } catch (err) {
+        console.error("Erro ao buscar INPC:", err);
+        setApiStatus("error");
+        if (!silent) {
+          alert("Não foi possível buscar o INPC automático. Você ainda pode informar o índice manualmente.");
+        }
+        return false;
+      }
+    }
+
+    function setApiStatus(status) {
+      inpcApiStatusEl.classList.remove("loading", "error");
+      if (status === "loading") {
+        inpcApiStatusEl.classList.add("loading");
+        inpcApiStatusEl.childNodes[1].nodeValue = " consultando…";
+      } else if (status === "error") {
+        inpcApiStatusEl.classList.add("error");
+        inpcApiStatusEl.childNodes[1].nodeValue = " erro API";
+      } else {
+        inpcApiStatusEl.childNodes[1].nodeValue = " pronto";
+      }
+    }
+
+    // ======= CÁLCULO DE CORREÇÃO INPC =======
+    function calculateInpc() {
+      const original = parseFloat(inpcOriginalAmountEl.value);
+      const paid = parseFloat(inpcPaidAmountEl.value);
+      const dueDateStr = inpcDueDateEl.value;
+      const payDateStr = inpcPayDateEl.value;
+
+      let inpcPercent = parseFloat(
+        inpcAccumulatedEl.value.replace(",", ".")
+      );
+
+      if (isNaN(original) || original <= 0) {
+        alert("Informe o valor original devido.");
+        return;
+      }
+      if (!dueDateStr || !payDateStr) {
+        alert("Informe as datas de vencimento e pagamento.");
+        return;
+      }
+      if (isNaN(inpcPercent) || inpcPercent < 0) {
+        alert("Informe o INPC acumulado no período (ou clique em 'Buscar INPC do período').");
+        return;
+      }
+
+      const due = new Date(dueDateStr + "T00:00:00");
+      const pay = new Date(payDateStr + "T00:00:00");
+      const diffMs = pay.getTime() - due.getTime();
+      const daysLate = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+      const corrected = original * (1 + inpcPercent / 100);
+
+      let diffText = "Não informado valor pago.";
+      if (!isNaN(paid)) {
+        const difference = corrected - paid;
+        diffText = `${formatCurrency(difference)} (${difference > 0 ? "faltando pagar" : "pago a maior"})`;
+      }
+
+      inpcResultBoxEl.style.display = "block";
+
+      if (daysLate > 0) {
+        inpcDaysLateTextEl.textContent = `Dias de atraso: ${daysLate} dia(s).`;
+      } else if (daysLate === 0) {
+        inpcDaysLateTextEl.textContent = "Pagamento na data de vencimento (sem atraso).";
+      } else {
+        inpcDaysLateTextEl.textContent = `Pagamento antecipado em ${Math.abs(daysLate)} dia(s).`;
+      }
+
+      inpcAccumulatedTextEl.textContent = `${inpcPercent.toFixed(2).replace(".", ",")}%`;
+      inpcCorrectedValueEl.textContent = formatCurrency(corrected);
+      inpcDifferenceValueEl.textContent = diffText;
+    }
+
+    // ======= EXPORTAR PDF =======
+
+    function exportToPdf() {
+      const { jsPDF } = window.jspdf;
+
+      const doc = new jsPDF();
+
+      const { childInfo, pensionConfig, payments } = appData;
+
+      doc.setFontSize(14);
+      doc.text("Relatório de Pensão Alimentícia", 14, 15);
+
+      doc.setFontSize(10);
+      doc.text("Dados da criança e responsável:", 14, 25);
+      doc.text(`Criança: ${childInfo.childName || "-"}`, 14, 31);
+      doc.text(
+        `Nascimento: ${
+          childInfo.birthDate ? formatDateBR(childInfo.birthDate) : "-"
+        }`,
+        14,
+        37
+      );
+      doc.text(`Responsável: ${childInfo.responsibleName || "-"}`, 14, 43);
+      doc.text(`Contato: ${childInfo.responsibleContact || "-"}`, 14, 49);
+
+      doc.text("Configuração da pensão:", 14, 59);
+      doc.text(
+        `Valor mensal: ${formatCurrency(pensionConfig.monthlyAmount || 0)}`,
+        14,
+        65
+      );
+      doc.text(
+        `Ajustes extras (mês atual): ${formatCurrency(
+          pensionConfig.extraAdjustments || 0
+        )}`,
+        14,
+        71
+      );
+      doc.text(`Observações: ${pensionConfig.notes || "-"}`, 14, 77);
+
+      const tableBody = payments
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((p) => [
+          p.date ? formatDateBR(p.date) : "",
+          p.amount != null ? formatCurrency(p.amount) : "",
+          p.notes || "",
+          p.receiptPdfDataUrl ? "Sim" : "Não"
+        ]);
+
+      doc.text("Histórico de pagamentos:", 14, 90);
+
+      if (tableBody.length === 0) {
+        doc.text("Nenhum pagamento registrado.", 14, 96);
+      } else {
+        doc.autoTable({
+          startY: 96,
+          head: [["Data", "Valor", "Observações", "Comprovante"]],
+          body: tableBody,
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [37, 99, 235] },
+        });
+      }
+
+      doc.save("relatorio_pensao.pdf");
+    }
+
+    // ======= EXPORTAR / IMPORTAR CSV (pagamentos) =======
+
+    function exportPaymentsToCsv() {
+      const lines = [];
+      lines.push("id,date,amount,notes");
+
+      for (const p of appData.payments) {
+        const esc = (text) =>
+          `"${String(text || "").replace(/"/g, '""')}"`;
+        lines.push([
+          esc(p.id),
+          esc(p.date),
+          esc(p.amount),
+          esc(p.notes),
+        ].join(","));
+      }
+
+      const csvContent = lines.join("\r\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "pagamentos_pensao.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function importPaymentsFromCsv(text) {
+      const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+      if (lines.length <= 1) {
+        alert("Arquivo CSV vazio ou inválido.");
+        return;
+      }
+
+      const header = lines[0].split(",");
+      const idxId = header.indexOf("id");
+      const idxDate = header.indexOf("date");
+      const idxAmount = header.indexOf("amount");
+      const idxNotes = header.indexOf("notes");
+
+      if (idxDate === -1 || idxAmount === -1) {
+        alert("CSV deve conter pelo menos as colunas: date, amount.");
+        return;
+      }
+
+      const imported = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const cols = parseCsvLine(line);
+
+        const date = cols[idxDate] || "";
+        const amount = parseFloat(cols[idxAmount]);
+        const notes = idxNotes !== -1 ? cols[idxNotes] || "" : "";
+        const id = idxId !== -1 && cols[idxId] ? cols[idxId] : generateId();
+
+        if (!date || isNaN(amount)) continue;
+
+        imported.push({ id, date, amount, notes, receiptPdfDataUrl: null });
+      }
+
+      if (imported.length === 0) {
+        alert("Nenhum pagamento válido encontrado no CSV.");
+        return;
+      }
+
+      if (!confirm("Isso vai substituir todos os pagamentos atuais pelos do arquivo. Deseja continuar?")) {
+        return;
+      }
+
+      appData.payments = imported;
+      saveData();
+      renderPaymentsTable();
+      updateSummary();
+      alert("Pagamentos importados com sucesso! (comprovantes não são incluídos em CSV).");
+    }
+
+    function parseCsvLine(line) {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+
+        if (char === '"' ) {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === "," && !inQuotes) {
+          result.push(current);
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      result.push(current);
+      return result;
+    }
+
+    // ======= REGISTRO DO SERVICE WORKER (PWA) =======
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(err => {
+          console.error("Falha ao registrar service worker:", err);
+        });
+      });
+    }
+
+    // ======= START =======
+    initMonthYearSelectors();
+    fillFormFromData();
+    renderPaymentsTable();
+    updateSummary();
+  </script>
+</body>
+</html>
