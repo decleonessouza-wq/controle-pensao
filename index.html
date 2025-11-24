@@ -702,6 +702,7 @@
           <button id="exportPdfBtn" class="secondary" type="button">📄 Exportar relatório em PDF</button>
           <button id="exportCsvBtn" class="secondary" type="button">📁 Exportar pagamentos (CSV)</button>
           <button id="downloadReceiptsZipBtn" class="secondary" type="button">📦 Baixar comprovantes (.zip)</button>
+          <button id="downloadProcessKitZipBtn" class="primary" type="button">⚖️ Baixar kit para processo (.zip)</button>
 
           <div>
             <label>
@@ -710,6 +711,7 @@
             <input id="importCsvInput" type="file" accept=".csv" />
           </div>
         </div>
+
       </section>
     </div>
 
@@ -866,6 +868,7 @@
     const exportCsvBtn = document.getElementById("exportCsvBtn");
     const importCsvInput = document.getElementById("importCsvInput");
     const downloadReceiptsZipBtn = document.getElementById("downloadReceiptsZipBtn");
+    const downloadProcessKitZipBtn = document.getElementById("downloadProcessKitZipBtn");
 
     const summaryPeriodEl = document.getElementById("summaryPeriod");
     const summaryTotalDueEl = document.getElementById("summaryTotalDue");
@@ -1066,15 +1069,78 @@
       updateSummary();
     });
 
-    // Exportar PDF
-    exportPdfBtn.addEventListener("click", () => {
-      exportToPdf();
-    });
+      // Gera o PDF do relatório e devolve como Blob (pra salvar ou colocar no ZIP)
+      function generateReportPdfBlob() {
+        const { jsPDF } = window.jspdf;
 
-    // Exportar CSV
-    exportCsvBtn.addEventListener("click", () => {
-      exportPaymentsToCsv();
-    });
+        const doc = new jsPDF();
+
+        const { childInfo, pensionConfig, payments } = appData;
+
+        doc.setFontSize(14);
+        doc.text("Relatório de Pensão Alimentícia", 14, 15);
+
+        doc.setFontSize(10);
+        doc.text("Dados da criança e responsável:", 14, 25);
+        doc.text(`Criança: ${childInfo.childName || "-"}`, 14, 31);
+        doc.text(
+          `Nascimento: ${
+            childInfo.birthDate ? formatDateBR(childInfo.birthDate) : "-"
+          }`,
+          14,
+          37
+        );
+        doc.text(`Responsável: ${childInfo.responsibleName || "-"}`, 14, 43);
+        doc.text(`Contato: ${childInfo.responsibleContact || "-"}`, 14, 49);
+
+        doc.text("Configuração da pensão:", 14, 59);
+        doc.text(
+          `Valor mensal: ${formatCurrency(pensionConfig.monthlyAmount || 0)}`,
+          14,
+          65
+        );
+        doc.text(
+          `Ajustes extras (mês atual): ${formatCurrency(
+            pensionConfig.extraAdjustments || 0
+          )}`,
+          14,
+          71
+        );
+        doc.text(`Observações: ${pensionConfig.notes || "-"}`, 14, 77);
+
+        const tableBody = payments
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .map((p) => [
+            p.date ? formatDateBR(p.date) : "",
+            p.amount != null ? formatCurrency(p.amount) : "",
+            p.notes || "",
+            p.receiptPdfDataUrl ? "Sim" : "Não"
+          ]);
+
+        doc.text("Histórico de pagamentos:", 14, 90);
+
+        if (tableBody.length === 0) {
+          doc.text("Nenhum pagamento registrado.", 14, 96);
+        } else {
+          doc.autoTable({
+            startY: 96,
+            head: [["Data", "Valor", "Observações", "Comprovante"]],
+            body: tableBody,
+            styles: { fontSize: 9 },
+            headStyles: { fillColor: [37, 99, 235] },
+          });
+        }
+
+        // Em vez de doc.save(), devolvemos como Blob
+        return doc.output("blob");
+      }
+
+      // Continua funcionando o botão "Exportar relatório em PDF"
+      function exportToPdf() {
+        const blob = generateReportPdfBlob();
+        saveAs(blob, "relatorio_pensao.pdf");
+      }
+
 
     // Baixar todos comprovantes em .zip
     downloadReceiptsZipBtn.addEventListener("click", async () => {
@@ -1103,6 +1169,45 @@
         alert("Não foi possível gerar o arquivo .zip de comprovantes.");
       }
     });
+
+          // Botão: Baixar KIT para processo (relatório + todos comprovantes)
+      downloadProcessKitZipBtn.addEventListener("click", async () => {
+        const paymentsWithReceipts = appData.payments.filter(p => p.receiptPdfDataUrl);
+
+        // Se não tiver comprovante, pergunta se quer só o relatório
+        if (paymentsWithReceipts.length === 0) {
+          const continuar = confirm(
+            "Não há comprovantes em PDF anexados. Deseja gerar o kit apenas com o relatório em PDF?"
+          );
+          if (!continuar) return;
+        }
+
+        const zip = new JSZip();
+
+        // 1) Adiciona o relatório em PDF dentro do ZIP
+        const reportBlob = generateReportPdfBlob();
+        zip.file("relatorio_pensao.pdf", reportBlob);
+
+        // 2) Adiciona todos os comprovantes em PDF
+        let index = 1;
+        for (const p of paymentsWithReceipts) {
+          const base64 = p.receiptPdfDataUrl.split(",")[1];
+          const dateSafe = (p.date || "sem-data").replace(/[^0-9-]/g, "");
+          const filename = `comprovante_${dateSafe}_${String(index).padStart(2,"0")}.pdf`;
+          zip.file(filename, base64, { base64: true });
+          index++;
+        }
+
+        // 3) Gera o ZIP final
+        try {
+          const blob = await zip.generateAsync({ type: "blob" });
+          saveAs(blob, "kit_pensao_processo.zip");
+        } catch (err) {
+          console.error("Erro ao gerar zip do kit:", err);
+          alert("Não foi possível gerar o ZIP do kit para processo.");
+        }
+      });
+
 
     // Importar CSV (sem comprovantes)
     importCsvInput.addEventListener("change", (event) => {
