@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Controle de Pensão Alimentícia - Emilly Victória (Filha Amada)</title>
+  <title>Controle de Pensão Alimentícia</title>
 
   <!-- PWA -->
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -514,6 +514,97 @@
       color: var(--color-base-soft);
     }
 
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.96);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 360px;
+      padding: 20px 18px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(148,163,184,0.5);
+      background: radial-gradient(circle at top, rgba(37,99,235,0.25), rgba(15,23,42,0.98));
+      box-shadow: 0 24px 50px rgba(15,23,42,0.9);
+    }
+
+    .auth-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .auth-subtitle {
+      font-size: 0.8rem;
+      color: var(--color-muted);
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    .auth-field {
+      margin-bottom: 8px;
+    }
+
+    .auth-field label {
+      font-size: 0.78rem;
+      color: var(--color-muted);
+    }
+
+    .auth-field input {
+      margin-top: 3px;
+    }
+
+    .auth-hint {
+      margin-top: 8px;
+      font-size: 0.72rem;
+      color: var(--color-muted);
+      line-height: 1.4;
+    }
+
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+
+    .table-container table {
+      min-width: 600px;
+    }
+
+    @media (max-width: 640px) {
+      .app-shell {
+        padding: 16px 10px 32px;
+      }
+
+      section.card {
+        padding: 12px 12px 10px;
+      }
+
+      h1 {
+        font-size: 1.3rem;
+      }
+
+      .payments-input-row {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .toolbar button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
     @media (max-width: 860px) {
       .layout-grid {
         grid-template-columns: minmax(0, 1fr);
@@ -539,6 +630,25 @@
   </style>
 </head>
 <body>
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-title" id="authTitle"></div>
+      <p class="auth-subtitle" id="authSubtitle"></p>
+      <div class="auth-field">
+        <label for="authUsername">Usuário</label>
+        <input id="authUsername" type="text" autocomplete="username">
+      </div>
+      <div class="auth-field">
+        <label for="authPassword">Senha</label>
+        <input id="authPassword" type="password" autocomplete="current-password">
+      </div>
+      <button id="authButton" class="primary" type="button">Entrar</button>
+      <p class="auth-hint">
+        <strong>Aviso:</strong> este login é apenas para uso pessoal neste dispositivo.
+        Para sincronizar entre dispositivos, seria necessário um servidor na nuvem.
+      </p>
+    </div>
+  </div>
   <div class="app-shell">
     <header class="app-header">
       <div class="app-title-row">
@@ -549,7 +659,8 @@
         Controle de Pensão Alimentícia
       </h1>
       <p class="subtitle">
-        "Minha filha amada, lembre-se sempre: o Senhor é a sua força e o seu escudo! Você é valiosa para o Rei dos reis e foi criada para florescer e vencer. Prossiga com coragem, pois a luz d'Ele guia os seus passos. Viva a promessa de que 'tudo posso naquele que me fortalece' (Filipenses 4:13)."
+        Cadastro completo, foto da criança, comprovantes em PDF, resumo mensal, histórico de pagamentos,
+        relatório em PDF, correção por INPC e suporte a PWA.
       </p>
     </header>
 
@@ -682,20 +793,22 @@
           </span>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Valor</th>
-              <th>Observações</th>
-              <th>Comprovante</th>
-              <th style="text-align: center;">Ações</th>
-            </tr>
-          </thead>
-          <tbody id="paymentsTableBody">
-            <!-- linhas via JS -->
-          </tbody>
-        </table>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Valor</th>
+                <th>Observações</th>
+                <th>Comprovante</th>
+                <th style="text-align: center;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="paymentsTableBody">
+              <!-- linhas via JS -->
+            </tbody>
+          </table>
+        </div>
 
         <div class="toolbar">
           <button id="exportPdfBtn" class="secondary" type="button">📄 Exportar relatório em PDF</button>
@@ -710,7 +823,6 @@
             <input id="importCsvInput" type="file" accept=".csv" />
           </div>
         </div>
-
       </section>
     </div>
 
@@ -804,6 +916,7 @@
     };
 
     let appData = loadData();
+    let editingPaymentId = null;
 
     function loadData() {
       try {
@@ -840,6 +953,14 @@
         reader.readAsDataURL(file);
       });
     }
+
+    // ======= AUTENTICAÇÃO (LOGIN SIMPLES) =======
+    const authOverlayEl = document.getElementById("authOverlay");
+    const authTitleEl = document.getElementById("authTitle");
+    const authSubtitleEl = document.getElementById("authSubtitle");
+    const authUsernameEl = document.getElementById("authUsername");
+    const authPasswordEl = document.getElementById("authPassword");
+    const authButtonEl = document.getElementById("authButton");
 
     // ======= ELEMENTOS =======
     const childNameEl = document.getElementById("childName");
@@ -1021,7 +1142,7 @@
     monthSelectEl.addEventListener("change", updateSummary);
     yearSelectEl.addEventListener("change", updateSummary);
 
-    // Pagamentos (com comprovante PDF)
+    // Pagamentos (com comprovante PDF e edição)
     addPaymentBtn.addEventListener("click", async () => {
       const date = paymentDateEl.value;
       const amount = parseFloat(paymentAmountEl.value);
@@ -1033,31 +1154,66 @@
         return;
       }
 
-      let receiptPdfDataUrl = null;
-      if (receiptFile) {
-        if (receiptFile.type !== "application/pdf") {
-          alert("O comprovante deve ser um arquivo PDF.");
-          return;
+      if (editingPaymentId) {
+        const idx = appData.payments.findIndex(p => p.id === editingPaymentId);
+        if (idx === -1) {
+          alert("Lançamento para edição não encontrado.");
+        } else {
+          let receiptPdfDataUrl = appData.payments[idx].receiptPdfDataUrl || null;
+
+          if (receiptFile) {
+            if (receiptFile.type !== "application/pdf") {
+              alert("O comprovante deve ser um arquivo PDF.");
+              return;
+            }
+            try {
+              receiptPdfDataUrl = await readFileAsDataUrl(receiptFile);
+            } catch (err) {
+              console.error("Erro ao ler PDF:", err);
+              alert("Não foi possível ler o comprovante em PDF.");
+              return;
+            }
+          }
+
+          appData.payments[idx] = {
+            ...appData.payments[idx],
+            date,
+            amount,
+            notes,
+            receiptPdfDataUrl
+          };
+          saveData();
         }
-        try {
-          receiptPdfDataUrl = await readFileAsDataUrl(receiptFile);
-        } catch (err) {
-          console.error("Erro ao ler PDF:", err);
-          alert("Não foi possível ler o comprovante em PDF.");
-          return;
+
+        editingPaymentId = null;
+        addPaymentBtn.textContent = "➕ Adicionar";
+      } else {
+        let receiptPdfDataUrl = null;
+        if (receiptFile) {
+          if (receiptFile.type !== "application/pdf") {
+            alert("O comprovante deve ser um arquivo PDF.");
+            return;
+          }
+          try {
+            receiptPdfDataUrl = await readFileAsDataUrl(receiptFile);
+          } catch (err) {
+            console.error("Erro ao ler PDF:", err);
+            alert("Não foi possível ler o comprovante em PDF.");
+            return;
+          }
         }
+
+        const payment = {
+          id: generateId(),
+          date,
+          amount,
+          notes,
+          receiptPdfDataUrl
+        };
+
+        appData.payments.push(payment);
+        saveData();
       }
-
-      const payment = {
-        id: generateId(),
-        date,
-        amount,
-        notes,
-        receiptPdfDataUrl
-      };
-
-      appData.payments.push(payment);
-      saveData();
 
       paymentDateEl.value = "";
       paymentAmountEl.value = "";
@@ -1068,78 +1224,15 @@
       updateSummary();
     });
 
-      // Gera o PDF do relatório e devolve como Blob (pra salvar ou colocar no ZIP)
-      function generateReportPdfBlob() {
-        const { jsPDF } = window.jspdf;
+    // Exportar PDF
+    exportPdfBtn.addEventListener("click", () => {
+      exportToPdf();
+    });
 
-        const doc = new jsPDF();
-
-        const { childInfo, pensionConfig, payments } = appData;
-
-        doc.setFontSize(14);
-        doc.text("Relatório de Pensão Alimentícia", 14, 15);
-
-        doc.setFontSize(10);
-        doc.text("Dados da criança e responsável:", 14, 25);
-        doc.text(`Criança: ${childInfo.childName || "-"}`, 14, 31);
-        doc.text(
-          `Nascimento: ${
-            childInfo.birthDate ? formatDateBR(childInfo.birthDate) : "-"
-          }`,
-          14,
-          37
-        );
-        doc.text(`Responsável: ${childInfo.responsibleName || "-"}`, 14, 43);
-        doc.text(`Contato: ${childInfo.responsibleContact || "-"}`, 14, 49);
-
-        doc.text("Configuração da pensão:", 14, 59);
-        doc.text(
-          `Valor mensal: ${formatCurrency(pensionConfig.monthlyAmount || 0)}`,
-          14,
-          65
-        );
-        doc.text(
-          `Ajustes extras (mês atual): ${formatCurrency(
-            pensionConfig.extraAdjustments || 0
-          )}`,
-          14,
-          71
-        );
-        doc.text(`Observações: ${pensionConfig.notes || "-"}`, 14, 77);
-
-        const tableBody = payments
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .map((p) => [
-            p.date ? formatDateBR(p.date) : "",
-            p.amount != null ? formatCurrency(p.amount) : "",
-            p.notes || "",
-            p.receiptPdfDataUrl ? "Sim" : "Não"
-          ]);
-
-        doc.text("Histórico de pagamentos:", 14, 90);
-
-        if (tableBody.length === 0) {
-          doc.text("Nenhum pagamento registrado.", 14, 96);
-        } else {
-          doc.autoTable({
-            startY: 96,
-            head: [["Data", "Valor", "Observações", "Comprovante"]],
-            body: tableBody,
-            styles: { fontSize: 9 },
-            headStyles: { fillColor: [37, 99, 235] },
-          });
-        }
-
-        // Em vez de doc.save(), devolvemos como Blob
-        return doc.output("blob");
-      }
-
-      // Continua funcionando o botão "Exportar relatório em PDF"
-      function exportToPdf() {
-        const blob = generateReportPdfBlob();
-        saveAs(blob, "relatorio_pensao.pdf");
-      }
-
+    // Exportar CSV
+    exportCsvBtn.addEventListener("click", () => {
+      exportPaymentsToCsv();
+    });
 
     // Baixar todos comprovantes em .zip
     downloadReceiptsZipBtn.addEventListener("click", async () => {
@@ -1169,44 +1262,42 @@
       }
     });
 
-          // Botão: Baixar KIT para processo (relatório + todos comprovantes)
-      downloadProcessKitZipBtn.addEventListener("click", async () => {
-        const paymentsWithReceipts = appData.payments.filter(p => p.receiptPdfDataUrl);
+    // Botão: Baixar KIT para processo (relatório + todos comprovantes)
+    downloadProcessKitZipBtn.addEventListener("click", async () => {
+      const paymentsWithReceipts = appData.payments.filter(p => p.receiptPdfDataUrl);
 
-        // Se não tiver comprovante, pergunta se quer só o relatório
-        if (paymentsWithReceipts.length === 0) {
-          const continuar = confirm(
-            "Não há comprovantes em PDF anexados. Deseja gerar o kit apenas com o relatório em PDF?"
-          );
-          if (!continuar) return;
-        }
+      if (paymentsWithReceipts.length === 0) {
+        const continuar = confirm(
+          "Não há comprovantes em PDF anexados. Deseja gerar o kit apenas com o relatório em PDF?"
+        );
+        if (!continuar) return;
+      }
 
-        const zip = new JSZip();
+      const zip = new JSZip();
 
-        // 1) Adiciona o relatório em PDF dentro do ZIP
-        const reportBlob = generateReportPdfBlob();
-        zip.file("relatorio_pensao.pdf", reportBlob);
+      // 1) Adiciona o relatório em PDF dentro do ZIP
+      const reportBlob = generateReportPdfBlob();
+      zip.file("relatorio_pensao.pdf", reportBlob);
 
-        // 2) Adiciona todos os comprovantes em PDF
-        let index = 1;
-        for (const p of paymentsWithReceipts) {
-          const base64 = p.receiptPdfDataUrl.split(",")[1];
-          const dateSafe = (p.date || "sem-data").replace(/[^0-9-]/g, "");
-          const filename = `comprovante_${dateSafe}_${String(index).padStart(2,"0")}.pdf`;
-          zip.file(filename, base64, { base64: true });
-          index++;
-        }
+      // 2) Adiciona todos os comprovantes em PDF
+      let index = 1;
+      for (const p of paymentsWithReceipts) {
+        const base64 = p.receiptPdfDataUrl.split(",")[1];
+        const dateSafe = (p.date || "sem-data").replace(/[^0-9-]/g, "");
+        const filename = `comprovante_${dateSafe}_${String(index).padStart(2,"0")}.pdf`;
+        zip.file(filename, base64, { base64: true });
+        index++;
+      }
 
-        // 3) Gera o ZIP final
-        try {
-          const blob = await zip.generateAsync({ type: "blob" });
-          saveAs(blob, "kit_pensao_processo.zip");
-        } catch (err) {
-          console.error("Erro ao gerar zip do kit:", err);
-          alert("Não foi possível gerar o ZIP do kit para processo.");
-        }
-      });
-
+      // 3) Gera o ZIP final
+      try {
+        const blob = await zip.generateAsync({ type: "blob" });
+        saveAs(blob, "kit_pensao_processo.zip");
+      } catch (err) {
+        console.error("Erro ao gerar zip do kit:", err);
+        alert("Não foi possível gerar o ZIP do kit para processo.");
+      }
+    });
 
     // Importar CSV (sem comprovantes)
     importCsvInput.addEventListener("change", (event) => {
@@ -1291,6 +1382,26 @@
 
         const actionsTd = document.createElement("td");
         actionsTd.classList.add("center");
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.textContent = "Editar";
+        editBtn.className = "secondary";
+        editBtn.style.marginRight = "4px";
+        editBtn.addEventListener("click", () => {
+          editingPaymentId = p.id;
+          paymentDateEl.value = p.date;
+          paymentAmountEl.value = p.amount;
+          paymentNotesEl.value = p.notes || "";
+          paymentReceiptEl.value = "";
+          addPaymentBtn.textContent =
+ "💾 Salvar edição";
+          try {
+            paymentDateEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          } catch (e) {}
+        });
+        actionsTd.appendChild(editBtn);
+
         const delBtn = document.createElement("button");
         delBtn.type = "button";
         delBtn.textContent = "Excluir";
@@ -1301,9 +1412,19 @@
             saveData();
             renderPaymentsTable();
             updateSummary();
+
+            if (editingPaymentId === p.id) {
+              editingPaymentId = null;
+              addPaymentBtn.textContent = "➕ Adicionar";
+              paymentDateEl.value = "";
+              paymentAmountEl.value = "";
+              paymentNotesEl.value = "";
+              paymentReceiptEl.value = "";
+            }
           }
         });
         actionsTd.appendChild(delBtn);
+
         tr.appendChild(actionsTd);
 
         paymentsTableBody.appendChild(tr);
@@ -1489,9 +1610,10 @@
       inpcDifferenceValueEl.textContent = diffText;
     }
 
-    // ======= EXPORTAR PDF =======
+    // ======= PDF (Relatório) =======
 
-    function exportToPdf() {
+    // Gera o PDF do relatório e devolve como Blob (pra salvar ou colocar no ZIP)
+    function generateReportPdfBlob() {
       const { jsPDF } = window.jspdf;
 
       const doc = new jsPDF();
@@ -1552,7 +1674,13 @@
         });
       }
 
-      doc.save("relatorio_pensao.pdf");
+      return doc.output("blob");
+    }
+
+    // Continua funcionando o botão "Exportar relatório em PDF"
+    function exportToPdf() {
+      const blob = generateReportPdfBlob();
+      saveAs(blob, "relatorio_pensao.pdf");
     }
 
     // ======= EXPORTAR / IMPORTAR CSV (pagamentos) =======
@@ -1662,6 +1790,62 @@
       return result;
     }
 
+    // ======= LOGIN SIMPLES (APENAS NESTE DISPOSITIVO) =======
+    const LOGIN_USER_KEY = "pensao_login_user_v1";
+    const LOGIN_PASS_KEY = "pensao_login_pass_v1";
+
+    function hashPassword(str) {
+      try {
+        return btoa(str);
+      } catch (e) {
+        return str;
+      }
+    }
+
+    function initAuthOverlay() {
+      if (!authOverlayEl) return;
+
+      const savedUser = localStorage.getItem(LOGIN_USER_KEY);
+      const savedPass = localStorage.getItem(LOGIN_PASS_KEY);
+
+      if (!savedUser || !savedPass) {
+        authTitleEl.textContent = "Criar acesso";
+        authSubtitleEl.textContent = "Defina um usuário e senha simples para proteger seus dados neste dispositivo.";
+        authUsernameEl.value = "";
+        authUsernameEl.readOnly = false;
+        authPasswordEl.value = "";
+        authButtonEl.textContent = "Criar acesso";
+        authButtonEl.onclick = () => {
+          const user = authUsernameEl.value.trim();
+          const pass = authPasswordEl.value;
+          if (!user || !pass) {
+            alert("Informe usuário e senha.");
+            return;
+          }
+          localStorage.setItem(LOGIN_USER_KEY, user);
+          localStorage.setItem(LOGIN_PASS_KEY, hashPassword(pass));
+          authOverlayEl.style.display = "none";
+          authPasswordEl.value = "";
+        };
+      } else {
+        authTitleEl.textContent = "Entrar";
+        authSubtitleEl.textContent = "Informe sua senha para acessar os dados salvos neste dispositivo.";
+        authUsernameEl.value = savedUser;
+        authUsernameEl.readOnly = true;
+        authPasswordEl.value = "";
+        authButtonEl.textContent = "Entrar";
+        authButtonEl.onclick = () => {
+          const pass = authPasswordEl.value;
+          if (hashPassword(pass) === savedPass) {
+            authOverlayEl.style.display = "none";
+            authPasswordEl.value = "";
+          } else {
+            alert("Senha incorreta.");
+          }
+        };
+      }
+    }
+
     // ======= REGISTRO DO SERVICE WORKER (PWA) =======
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
@@ -1673,6 +1857,7 @@
 
     // ======= START =======
     initMonthYearSelectors();
+    initAuthOverlay();
     fillFormFromData();
     renderPaymentsTable();
     updateSummary();
